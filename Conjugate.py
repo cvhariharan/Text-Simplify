@@ -6,8 +6,6 @@ import inflect
 
 class Conjugate:
     def __init__(self):
-        # self.word = word
-        # self.word_pos = nltk.pos_tag([word])[0]
         self.lemmatizer = WordNetLemmatizer()
         self.inflect = inflect.engine()
 
@@ -25,14 +23,10 @@ class Conjugate:
 
     def isPlural(self, word_pos):
         wordLemma = self.lemmatizer.lemmatize(word_pos[0], self.nltk_tag_to_wordnet_tag(word_pos[1]))
-        # print(wordLemma)
         return not (wordLemma == word_pos[0])
-        # print(str(word_pos) + " " + str(self.inflect.singular_noun(word_pos[0])))
-        # return not self.inflect.singular_noun(word_pos[0])
 
     def conjugate(self, synonym, word_pos):
         # check if noun
-        # print(word_pos[1])
         if self.nltk_tag_to_wordnet_tag(word_pos[1]) == wordnet.NOUN:
             # check if synonym and word have same plurality, if not conjugate
             if self.isPlural(word_pos):
