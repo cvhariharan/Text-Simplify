@@ -5,13 +5,14 @@ from nltk.tokenize import word_tokenize, sent_tokenize
 from nltk.corpus import wordnet
 from enum import Enum
 import json, thesaurus, math
-import Conjugate
+import Conjugate, pprint
+import pandas as pd
 
 
 # use spacy for tagging
 
 def generate_freq_dict():
-    """ Create frequency dictionary based on BROWN corpora. """
+    # Uses brown corpus
     freq_dict = {}
     for sentence in brown.sents():
         for word in sentence:
@@ -33,6 +34,12 @@ class Simplify:
         self.model = gensim.models.KeyedVectors.load_word2vec_format('./GoogleNews-vectors-negative300-SLIM.bin', binary=True)
         self.lemmatizer = WordNetLemmatizer()
         self.text = src
+        self.pp = pprint.PrettyPrinter(indent=4)
+
+        ngrams = pd.read_csv('ngrams.csv')
+        ngrams = ngrams.drop_duplicates(subset='bigram', keep='first')
+        self.ngram_freq = dict(zip(ngrams.bigram, ngrams.freq))
+
         self.ppdb = main_ppdb.load_ppdb(path='./ppdb-2.0-xxl-lexical', load_pickle=True)
         self.nlp = spacy.load('en_core_web_sm')
         print("Complete.")
@@ -60,7 +67,7 @@ class Simplify:
         synonyms = []
         similar = []
         tag = self.nlp(word)[0].tag_
-        print(tag)
+        # print(tag)
         if tag != None:
             try:
                 similar = self.model.most_similar(word, topn=n)
@@ -143,9 +150,26 @@ class Simplify:
             pass
         return sorted(index.items(), key=operator.itemgetter(1), reverse=True)
 
-    def check_if_fits(self, sentence, word, replacement, threshold=0.1):
-        newSent = sentence.replace(word, replacement)
-        return self.model.wmdistance(newSent, sentence) < threshold
+    # def check_if_fits(self, sentence, word, replacement, threshold=0.1):
+    #     newSent = sentence.replace(word, replacement)
+    #     return self.model.wmdistance(newSent, sentence) < threshold
+
+
+    def checkIfFits(self, word, context):
+        # Checks if bigram with this context exist
+        key1 = context[0] + " " + word
+        key2 = word + " " + context[1]
+        return key1 in self.ngram_freq.keys() or key2 in self.ngram_freq.keys()
+
+    def getBigramCount(self, word, context):
+        key1 = context[0] + " " + word
+        key2 = word + " " + context[1]
+        score = 0
+        if key1 in self.ngram_freq.keys():
+            score += self.ngram_freq[key1]
+        if key2 in self.ngram_freq.keys():
+            score += self.ngram_freq[key2]
+        return score
 
     def testContext(self, sentence, word, replacements):
         # uses WMD to test sentence similarity after replacing
@@ -175,21 +199,23 @@ class Simplify:
             return bestSent
         return sentence
 
-    def getWeightedScore(self, a, b, alpha=0.7, beta=0.3):
+    def getWeightedScore(self, a, b, c, alpha=0.7, beta=0.3, gamma=0.5):
         # return 1/((alpha/(a+1)) + (beta)/(b+1))
-        return (alpha * a + beta * b) / 2
+        return (alpha * a + beta * b + gamma * c) / 3
 
     def simplify(self):
         replaced = set()
         tokens = self.nlp(self.text)
         text = self.text
         i = 0
-        print(sum(self.freq.values()))
+        # print(sum(self.freq.values()))
         top_n = 3000
         freq_top_n = sorted(self.freq.values(), reverse=True)[top_n - 1]
         # print(freq_top_n)
-        difficult = []
+        # dict that stores each difficult word against its context
+        difficult = {}
         index = {}
+        count = 0
         for t in tokens:
             if self.nltk_tag_to_wordnet_tag(t.tag_) != None and self.isReplaceable(t.text):
                 wordLemma = self.lemmatizer.lemmatize(t.text, self.nltk_tag_to_wordnet_tag(t.tag_))
@@ -197,13 +223,14 @@ class Simplify:
                     # print(wordLemma)
                     if wordLemma in self.freq.keys():
                         if self.freq[wordLemma] < freq_top_n:
-                            difficult.append(t.text)
+                            difficult[t.text] = [tokens[count-1].text, tokens[count+1].text]
                     else:
-                        difficult.append(t.text)
+                        difficult[t.text] = [tokens[count-1].text, tokens[count+1].text]
+            count += 1
                     # print(t.text + " - > " + str(self.ppdb_words(t.text)))
-        print(difficult)
+        self.pp.pprint(difficult)
         optionsDict = {}
-        for dif in difficult:
+        for dif in difficult.keys():
             options = {}
             # opclear
             # tionsDict['ppdb'] = []
@@ -214,10 +241,11 @@ class Simplify:
                 word = synonym[0]
                 similarity = synonym[1]
                 complexity = self.getSimplicity(word)
-                options[word] = self.getWeightedScore(complexity, similarity, 0.6, 0.4)
+                bigramScore = self.getBigramCount(word, difficult[dif])
+                options[word] = self.getWeightedScore(complexity, similarity, bigramScore, 0.6, 0.4, 1)
 
             optionsDict[dif] = sorted(options.items(), key=operator.itemgetter(1), reverse=True)
-        print(optionsDict)
+        self.pp.pprint(optionsDict)
 
 
         sentences = sent_tokenize(self.text)
@@ -225,21 +253,28 @@ class Simplify:
         for sent in sentences:
             for dif in optionsDict.keys():
                 if dif in sent:
-                    # m = 0
+                    m = 0
                     optionsLen = len(optionsDict[dif])
+                    
                     if optionsLen > 0:
-                    #     while not self.check_if_fits(sent, dif, optionsDict[dif][m][0], 0.3):
-                    #         m += 1
-                    #         if m > optionsLen:
-                    #             break
-                        if self.check_if_fits(sent, dif, optionsDict[dif][0][0]):
-                            sent = sent.replace(dif, optionsDict[dif][0][0])
+                        while not self.checkIfFits(optionsDict[dif][m][0], difficult[dif]):
+                            # print((not self.checkIfFits(optionsDict[dif][m][0], difficult[dif])))
+                            # print(optionsDict[dif][m][0])
+                            m += 1
+                            if m > optionsLen-1:
+                                break
+                        if m > 0:
+                            m = m - 1
+                        if self.checkIfFits(optionsDict[dif][m][0], difficult[dif]):
+                            sent = sent.replace(dif, optionsDict[dif][m][0])
+                        # if self.checkIfFits(optionsDict[dif][0][0], difficult[dif]):
+                        #     sent = sent.replace(dif, optionsDict[dif][0][0])
             finalText = finalText + sent + "\n"
         
         print(finalText)
 
 
-#
+src = "Nevertheless, they spoke with a common paradigm in mind; they shared the Marxist Hegelian mindset and were preoccupied with similar questions."
 # src = "The river is formed through the confluence of the Macintyre River and Weir River (part of the Border Rivers system), north of Mungindi, in the Southern Downs region of Queensland. The Barwon River generally flows south and west, joined by 36 tributaries, including major inflows from the Boomi, Moonie, Gwydir, Mehi, Namoi, Macquarie, Bokhara and Bogan rivers. During major flooding, overflow from the Narran Lakes and the Narran River also flows into the Barwon. The confluence of the Barwon and Culgoa rivers, between Brewarrina and Bourke, marks the start of the Darling River."
 # src = "It was believed that illnesses were brought on humans by demons and these beliefs and rituals could have prehistoric roots. According to folklore, the 18 demons who are depicted in the Sanni Yakuma originated during the time of the Buddha.[N 1] The story goes that the king of Licchavis of Vaishali suspected his queen of committing adultery and had her killed. However, she gave birth when she was executed and her child became the Kola Sanniya, who grew up 'feeding on his mother's corpse'. The Kola Sanni demon destroyed the city, seeking vengeance on his father, the king. He created eighteen lumps of poison and charmed them, thereby turning them into demons who assisted him in his destruction of the city.They killed the king, and continued to wreak havoc in the city, 'killing and eating thousands' daily, until finally being tamed by the Buddha and agreed to stop harming humans."
 # src = "The enemy captured many soldiers. The captured army soldier, after waiting, secretly captured pictures that captured the war zone. Her invention will capture carbon dioxide and will capture the silver medal. She captured her friend's chess pieces and then, after capturing more footage, she captured our hearts. Her friend made a mint while chewing a mint. He tried to mint quarters and sell these quarters to the Philadelphia Mint. He liked mint tea and studying mint leaves while working on Linux Mint. But, the breath mints he always mints don't taste like mint chip ice cream and don't earn him mints."
