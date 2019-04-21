@@ -214,15 +214,32 @@ class Simplify:
                 word = synonym[0]
                 similarity = synonym[1]
                 complexity = self.getSimplicity(word)
-                options[word] = self.getWeightedScore(complexity, similarity, 0.8, 0.2)
+                options[word] = self.getWeightedScore(complexity, similarity, 0.6, 0.4)
 
             optionsDict[dif] = sorted(options.items(), key=operator.itemgetter(1), reverse=True)
         print(optionsDict)
+
+
+        sentences = sent_tokenize(self.text)
+        finalText = ""
+        for sent in sentences:
+            for dif in optionsDict.keys():
+                if dif in sent:
+                    # m = 0
+                    optionsLen = len(optionsDict[dif])
+                    if optionsLen > 0:
+                    #     while not self.check_if_fits(sent, dif, optionsDict[dif][m][0], 0.3):
+                    #         m += 1
+                    #         if m > optionsLen:
+                    #             break
+                        if self.check_if_fits(sent, dif, optionsDict[dif][0][0]):
+                            sent = sent.replace(dif, optionsDict[dif][0][0])
+            finalText = finalText + sent + "\n"
         
+        print(finalText)
 
 
-
-src = "Nevertheless, they spoke with a common paradigm in mind; they shared the Marxist Hegelian mindset and were preoccupied with similar questions."
+#
 # src = "The river is formed through the confluence of the Macintyre River and Weir River (part of the Border Rivers system), north of Mungindi, in the Southern Downs region of Queensland. The Barwon River generally flows south and west, joined by 36 tributaries, including major inflows from the Boomi, Moonie, Gwydir, Mehi, Namoi, Macquarie, Bokhara and Bogan rivers. During major flooding, overflow from the Narran Lakes and the Narran River also flows into the Barwon. The confluence of the Barwon and Culgoa rivers, between Brewarrina and Bourke, marks the start of the Darling River."
 # src = "It was believed that illnesses were brought on humans by demons and these beliefs and rituals could have prehistoric roots. According to folklore, the 18 demons who are depicted in the Sanni Yakuma originated during the time of the Buddha.[N 1] The story goes that the king of Licchavis of Vaishali suspected his queen of committing adultery and had her killed. However, she gave birth when she was executed and her child became the Kola Sanniya, who grew up 'feeding on his mother's corpse'. The Kola Sanni demon destroyed the city, seeking vengeance on his father, the king. He created eighteen lumps of poison and charmed them, thereby turning them into demons who assisted him in his destruction of the city.They killed the king, and continued to wreak havoc in the city, 'killing and eating thousands' daily, until finally being tamed by the Buddha and agreed to stop harming humans."
 # src = "The enemy captured many soldiers. The captured army soldier, after waiting, secretly captured pictures that captured the war zone. Her invention will capture carbon dioxide and will capture the silver medal. She captured her friend's chess pieces and then, after capturing more footage, she captured our hearts. Her friend made a mint while chewing a mint. He tried to mint quarters and sell these quarters to the Philadelphia Mint. He liked mint tea and studying mint leaves while working on Linux Mint. But, the breath mints he always mints don't taste like mint chip ice cream and don't earn him mints."
