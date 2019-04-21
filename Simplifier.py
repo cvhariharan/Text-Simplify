@@ -11,25 +11,13 @@ import pandas as pd
 
 # use spacy for tagging
 
-def generate_freq_dict():
-    # Uses brown corpus
-    freq_dict = {}
-    for sentence in brown.sents():
-        for word in sentence:
-            word = word.lower()
-            if word in freq_dict.keys():
-                freq_dict[word] += 1
-            else:
-                freq_dict[word] = 1
-    return freq_dict
-
 class Simplify:
 
     def __init__(self, src):
         print("Initializing...")
         self.stop_words = set(stopwords.words('english')) 
         # freqFile = open("./freqs.json", 'r')
-        self.freq = generate_freq_dict()
+        self.freq = self.getFreqDict()
         self.freq_sum = sum(self.freq.values())
         self.model = gensim.models.KeyedVectors.load_word2vec_format('./GoogleNews-vectors-negative300-SLIM.bin', binary=True)
         self.lemmatizer = WordNetLemmatizer()
@@ -44,6 +32,18 @@ class Simplify:
         self.nlp = spacy.load('en_core_web_sm')
         print("Complete.")
         self.simplify()
+
+    def getFreqDict(self):
+        # Uses brown corpus
+        freq_dict = {}
+        for sentence in brown.sents():
+            for word in sentence:
+                word = word.lower()
+                if word in freq_dict.keys():
+                    freq_dict[word] += 1
+                else:
+                    freq_dict[word] = 1
+        return freq_dict
 
     def nltk_tag_to_wordnet_tag(self, nltk_tag):
         if nltk_tag.startswith('J'):
@@ -199,6 +199,14 @@ class Simplify:
             return bestSent
         return sentence
 
+    def getARI(self, text):
+        # Returns the automated readability index of a text
+        characters = len(text)
+        wordCount = len(text.split(" "))
+        sentences = len(sent_tokenize(text))
+
+        return (4.71*(characters/wordCount) + 0.5*(wordCount/sentences) - 21.43)
+
     def getWeightedScore(self, a, b, c, alpha=0.7, beta=0.3, gamma=0.5):
         # return 1/((alpha/(a+1)) + (beta)/(b+1))
         return (alpha * a + beta * b + gamma * c) / 3
@@ -251,6 +259,7 @@ class Simplify:
         sentences = sent_tokenize(self.text)
         finalText = ""
         for sent in sentences:
+            sentScore = self.getARI(sent)
             for dif in optionsDict.keys():
                 if dif in sent:
                     m = 0
@@ -266,18 +275,19 @@ class Simplify:
                         if m > 0:
                             m = m - 1
                         if self.checkIfFits(optionsDict[dif][m][0], difficult[dif]):
-                            sent = sent.replace(dif, optionsDict[dif][m][0])
-                        # if self.checkIfFits(optionsDict[dif][0][0], difficult[dif]):
-                        #     sent = sent.replace(dif, optionsDict[dif][0][0])
+                            # check if improves readability
+                            newSentScore = self.getARI(sent.replace(dif, optionsDict[dif][m][0]))
+                            if newSentScore < sentScore:
+                                sent = sent.replace(dif, optionsDict[dif][m][0])
             finalText = finalText + sent + "\n"
         
         print(finalText)
 
 
-src = "Nevertheless, they spoke with a common paradigm in mind; they shared the Marxist Hegelian mindset and were preoccupied with similar questions."
+# src = "Nevertheless, they spoke with a common paradigm in mind; they shared the Marxist Hegelian mindset and were preoccupied with similar questions."
 # src = "The river is formed through the confluence of the Macintyre River and Weir River (part of the Border Rivers system), north of Mungindi, in the Southern Downs region of Queensland. The Barwon River generally flows south and west, joined by 36 tributaries, including major inflows from the Boomi, Moonie, Gwydir, Mehi, Namoi, Macquarie, Bokhara and Bogan rivers. During major flooding, overflow from the Narran Lakes and the Narran River also flows into the Barwon. The confluence of the Barwon and Culgoa rivers, between Brewarrina and Bourke, marks the start of the Darling River."
 # src = "It was believed that illnesses were brought on humans by demons and these beliefs and rituals could have prehistoric roots. According to folklore, the 18 demons who are depicted in the Sanni Yakuma originated during the time of the Buddha.[N 1] The story goes that the king of Licchavis of Vaishali suspected his queen of committing adultery and had her killed. However, she gave birth when she was executed and her child became the Kola Sanniya, who grew up 'feeding on his mother's corpse'. The Kola Sanni demon destroyed the city, seeking vengeance on his father, the king. He created eighteen lumps of poison and charmed them, thereby turning them into demons who assisted him in his destruction of the city.They killed the king, and continued to wreak havoc in the city, 'killing and eating thousands' daily, until finally being tamed by the Buddha and agreed to stop harming humans."
-# src = "The enemy captured many soldiers. The captured army soldier, after waiting, secretly captured pictures that captured the war zone. Her invention will capture carbon dioxide and will capture the silver medal. She captured her friend's chess pieces and then, after capturing more footage, she captured our hearts. Her friend made a mint while chewing a mint. He tried to mint quarters and sell these quarters to the Philadelphia Mint. He liked mint tea and studying mint leaves while working on Linux Mint. But, the breath mints he always mints don't taste like mint chip ice cream and don't earn him mints."
+src = "The enemy captured many soldiers. The captured army soldier, after waiting, secretly captured pictures that captured the war zone. Her invention will capture carbon dioxide and will capture the silver medal. She captured her friend's chess pieces and then, after capturing more footage, she captured our hearts. Her friend made a mint while chewing a mint. He tried to mint quarters and sell these quarters to the Philadelphia Mint. He liked mint tea and studying mint leaves while working on Linux Mint. But, the breath mints he always mints don't taste like mint chip ice cream and don't earn him mints."
 s = Simplify(src.lower())
 # nlp = spacy.load('en_core_web_sm')
 # w = nltk.pos_tag(['paradigms'])
