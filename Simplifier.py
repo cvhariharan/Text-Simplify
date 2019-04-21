@@ -24,7 +24,7 @@ class Simplify:
         ngrams = pd.read_csv('ngrams.csv')
         ngrams = ngrams.drop_duplicates(subset='bigram', keep='first')
         self.ngram_freq = dict(zip(ngrams.bigram, ngrams.freq))
-
+        
         self.nlp = spacy.load('en_core_web_sm')
         print("Complete.")
         self.simplify()
@@ -180,10 +180,10 @@ class Simplify:
                             # check if improves readability
                             newSentScore = self.getARI(sent.replace(dif, optionsDict[dif][m][0]))
                             if newSentScore < sentScore:
-                                sent = sent.replace(dif, optionsDict[dif][m][0])
+                                sent = sent.replace(dif, "*"+optionsDict[dif][m][0]+"*")
             finalText = finalText + sent + "\n"
         
         print(finalText)
 
-src = "Yet, Sherman’s bedfellows are far from strange. Art, despite its religious and magical origins, very soon became a commercial venture. From bourgeois patrons funding art they barely understood in order to share their protegee’s prestige, to museum curators stage-managing the cult of artists in order to enhance the market value of museum holdings, entrepreneurs have found validation and profit in big-name art. Speculators, thieves, and promoters long ago created and fed a market where cultural icons could be traded like commodities."
+src = input("Text: ")
 s = Simplify(src.lower())
